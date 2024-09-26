@@ -15,6 +15,7 @@ import ContractPicker from "../../Components/pickers/ContractPicker/ContractPick
 import Delegate from "../../Pages/Delegate/Delegate";
 import Airdrop from "../../Pages/Airdrop/Airdrop";
 //import Staking from "../../Pages/Staking/Staking";
+import ComingSoon from "../../Pages/ComingSoon/ComingSoon";
 import Setting from "../../Pages/Setting/Setting";
 import Participate from "../../Pages/Participate/Participate";
 import voiStakingUtils from "../../utils/voiStakingUtils";
@@ -92,11 +93,10 @@ function AppRouter(): ReactElement {
                           element={<Overview></Overview>}
                         ></Route>
                         <Route path="/stake" element={<Stake></Stake>}></Route>
-                        {/*
                         <Route
                           path="/deposit"
                           element={<Deposit></Deposit>}
-                    ></Route>*/}
+                        ></Route>
                         <Route
                           path="/withdraw"
                           element={<Withdraw></Withdraw>}
@@ -114,10 +114,17 @@ function AppRouter(): ReactElement {
                           path="/airdrop"
                           element={<Airdrop></Airdrop>}
                         ></Route>
-                        {/*<Route
-                          path="/staking"
-                          element={<Staking></Staking>}
-                          ></Route>*/}
+                        {
+                          <Route
+                            path="/staking"
+                            element={
+                              <ComingSoon
+                                href="https://medium.com/@voifoundation/vois-staking-program-140mm-voi-4cbfd3a27f63"
+                                anchorText="Learn More about Voi’s Staking Program"
+                              />
+                            }
+                          ></Route>
+                        }
                         {/*<Route
                           path="/setting"
                           element={<Setting></Setting>}

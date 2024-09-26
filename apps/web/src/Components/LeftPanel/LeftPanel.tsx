@@ -30,24 +30,16 @@ function LeftPanel(): ReactElement {
   const dashboardRoutes: string[] = [
     "overview",
     "stake",
+    "staking",
     "deposit",
     "withdraw",
     "transfer",
     "delegate",
   ];
 
-  const airdropRoutes: string[] = ["airdrop"];
-
-  const stakingRoutes: string[] = ["staking"];
-
   const settingRoutes: string[] = ["setting"];
 
-  const routes: string[] = [
-    ...dashboardRoutes,
-    ...airdropRoutes,
-    ...stakingRoutes,
-    ...settingRoutes,
-  ];
+  const routes: string[] = [...dashboardRoutes, ...settingRoutes];
 
   if (routes.indexOf(route) === -1) {
     route = false;
@@ -58,32 +50,6 @@ function LeftPanel(): ReactElement {
       dispatch(loadAccountData(activeAccount.address));
     }
   }, [activeAccount]);
-
-  // const airdropTabs = [
-  //   {
-  //     label: "Overview",
-  //     value: "overview",
-  //     icon: <HomeOutlined></HomeOutlined>,
-  //   },
-  //   {
-  //     label: "Airdrop",
-  //     value: "airdrop",
-  //     icon: <Redeem></Redeem>,
-  //   },
-  // ];
-
-  // const stakingTabs = [
-  //   {
-  //     label: "Overview",
-  //     value: "overview",
-  //     icon: <HomeOutlined></HomeOutlined>,
-  //   },
-  //   {
-  //     label: "Staking",
-  //     value: "staking",
-  //     icon: <AdjustOutlined></AdjustOutlined>,
-  //   },
-  // ];
 
   // const settingTabls = [
   //   {
@@ -100,19 +66,26 @@ function LeftPanel(): ReactElement {
 
   const dashboardTabs = [
     {
-      label: "Overview",
+      label: "Contracts Overview",
       value: "overview",
       icon: <HomeOutlined></HomeOutlined>,
     },
+    /*
     {
       label: "Lockup Config",
       value: "airdrop",
       icon: <LockClockIcon></LockClockIcon>,
     },
+    */
     {
-      label: "Stake",
+      label: "Earn Block Rewards",
       value: "stake",
       icon: <AdjustOutlined></AdjustOutlined>,
+    },
+    {
+      label: "Staking Program",
+      value: "staking",
+      icon: <LockClockIcon></LockClockIcon>,
     },
     /*
     {
@@ -120,13 +93,11 @@ function LeftPanel(): ReactElement {
       value: "deposit",
       icon: <AdfScannerOutlined></AdfScannerOutlined>,
     },
-    */
     {
       label: "Withdraw",
       value: "withdraw",
       icon: <Payments></Payments>,
     },
-    /*
     {
       label: "Transfer",
       value: "transfer",
@@ -153,33 +124,7 @@ function LeftPanel(): ReactElement {
             orientation={"vertical"}
             className="vertical-pills"
           >
-            {/*route === "airdrop"
-              ? airdropTabs.map((tab) => (
-                  <Tab
-                    key={tab.value}
-                    label={tab.label}
-                    value={tab.value}
-                    iconPosition="start"
-                    component={Link}
-                    to={`/${tab.value}`}
-                    icon={tab.icon}
-                  />
-                ))
-              : null*/}
-            {/* {route === "staking"
-              ? stakingTabs.map((tab) => (
-                  <Tab
-                    key={tab.value}
-                    label={tab.label}
-                    value={tab.value}
-                    iconPosition="start"
-                    component={Link}
-                    to={`/${tab.value}`}
-                    icon={tab.icon}
-                  />
-                ))
-              : null} */}
-            {route === "setting"
+            {/*route === "setting"
               ? settingTabls.map((tab) => (
                   <Tab
                     key={tab.value}
@@ -191,8 +136,8 @@ function LeftPanel(): ReactElement {
                     icon={tab.icon}
                   />
                 ))
-              : null}
-            {["staking", "setting"].indexOf(route) === -1
+              : null*/}
+            {["setting"].indexOf(route) === -1
               ? dashboardTabs.map((tab) => (
                   <Tab
                     key={tab.value}

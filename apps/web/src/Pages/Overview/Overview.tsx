@@ -1,5 +1,5 @@
 import "./Overview.scss";
-import { ReactElement, useEffect, useState } from "react";
+import React, { ReactElement, useEffect, useState } from "react";
 import { useWallet } from "@txnlab/use-wallet-react";
 import { LoadingTile } from "@repo/ui";
 import { AccountData, CoreStaker } from "@repo/voix";
@@ -14,16 +14,27 @@ import {
 } from "@repo/algocore";
 import voiStakingUtils from "../../utils/voiStakingUtils";
 import { AccountResult } from "@algorandfoundation/algokit-utils/types/indexer";
-import { Box, Button, Grid, Tab, Tabs, Typography } from "@mui/material";
+import {
+  Box,
+  Button,
+  ButtonGroup,
+  Grid,
+  Tab,
+  Tabs,
+  Typography,
+} from "@mui/material";
 import { microalgosToAlgos } from "algosdk";
 import { NumericFormat } from "react-number-format";
 import JsonViewer from "../../Components/JsonViewer/JsonViewer";
-import Lockup from "./Lockup/Lockup";
-import { initAccountData } from "../../Redux/staking/userReducer";
+import Deposit from "./Deposit/Deposit";
+import Withdraw from "./Withdraw/Withdraw";
+import {
+  initAccountData,
+  loadAccountData,
+} from "../../Redux/staking/userReducer";
 import ContractPicker from "../../Components/pickers/ContractPicker/ContractPicker";
 import humanizeDuration from "humanize-duration";
 import { InfoTooltip } from "../../Components/InfoToolTip/InfoToolTip";
-import { Info } from "@mui/icons-material";
 
 function Overview(): ReactElement {
   const { loading } = useSelector((state: RootState) => state.node);
@@ -75,8 +86,6 @@ function Overview(): ReactElement {
   const stakingAccount = staking.account;
   const contractState = contract.state;
 
-  console.log({ accountData, stakingAccount, contractState });
-
   const [isMetadataVisible, setMetadataVisibility] = useState<boolean>(false);
 
   const isDataLoading = loading || account.loading || staking.loading;
@@ -92,7 +101,10 @@ function Overview(): ReactElement {
     ready
   );
 
-  const [isLockupModalVisible, setLockupModalVisibility] =
+  const [isDepositModalVisible, setDepositModalVisibility] =
+    useState<boolean>(false);
+
+  const [isWithdrawModalVisible, setWithdrawModalVisibility] =
     useState<boolean>(false);
 
   const [expiresIn, setExpiresIn] = useState<string>("--");
@@ -142,6 +154,14 @@ function Overview(): ReactElement {
       "aria-controls": `simple-tabpanel-${index}`,
     };
   }
+
+  const handleModalClose = (
+    setModalVisibility: React.Dispatch<React.SetStateAction<boolean>>
+  ) => {
+    if (!activeAccount) return;
+    setModalVisibility(false);
+    dispatch(loadAccountData(activeAccount.address));
+  };
 
   return (
     <div className="overview-wrapper">
@@ -225,11 +245,38 @@ function Overview(): ReactElement {
                     marginTop: "20px",
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "flex-start",
+                    justifyContent: "space-between",
                   }}
                 >
                   <div>Contract Overview</div>
+                  <ButtonGroup variant="outlined">
+                    <Button
+                      onClick={() => {
+                        setDepositModalVisibility(true);
+                      }}
+                    >
+                      Deposit
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setWithdrawModalVisibility(true);
+                      }}
+                    >
+                      Withdraw
+                    </Button>
+                  </ButtonGroup>
                 </div>
+                <Deposit
+                  show={isDepositModalVisible}
+                  onClose={() => handleModalClose(setDepositModalVisibility)}
+                  onSuccess={() => handleModalClose(setDepositModalVisibility)}
+                ></Deposit>
+                <Withdraw
+                  show={isWithdrawModalVisible}
+                  onClose={() => handleModalClose(setWithdrawModalVisibility)}
+                  onSuccess={() => handleModalClose(setWithdrawModalVisibility)}
+                ></Withdraw>
+
                 <Grid container spacing={2}>
                   <Grid item xs={12}></Grid>
                   <Grid item xs={12} sm={6} md={4} lg={4} xl={3}>
@@ -454,7 +501,6 @@ function Overview(): ReactElement {
                       {new CoreStaker(accountData).stakingAddress()}
                     </div>
                   </div>
-
                   <div className="prop">
                     <div className="key">Staking Contract</div>
                     <div
@@ -468,21 +514,6 @@ function Overview(): ReactElement {
                       {new CoreStaker(accountData).contractId()}
                     </div>
                   </div>
-
-                  {/*<div className="prop">
-                    <div className="key">Deployer</div>
-                    <div
-                      className="val hover hover-underline underline"
-                      onClick={() => {
-                        new BlockPackExplorer(coreNodeInstance).openApplication(
-                          new CoreStaker(accountData).deployer()
-                        );
-                      }}
-                    >
-                      {new CoreStaker(accountData).deployer()}
-                    </div>
-                    </div>*/}
-
                   {new CoreStaker(accountData).isDelegated(contractState) ? (
                     <div className="prop">
                       <div className="key">Delegated to</div>
@@ -505,146 +536,7 @@ function Overview(): ReactElement {
                       </div>
                     </div>
                   ) : null}
-
-                  {/*<div className="prop">
-                    <div className="key">Messenger</div>
-                    <div
-                      className="val hover hover-underline underline"
-                      onClick={() => {
-                        new BlockPackExplorer(coreNodeInstance).openApplication(
-                          new CoreStaker(accountData).messenger()
-                        );
-                      }}
-                    >
-                      {new CoreStaker(accountData).messenger()}
-                    </div>
-                    </div>*/}
                 </div>
-
-                {/*<div className="lockup-details">
-                  <div className="lockup-details-header">Lockup details</div>
-                  <div className="lockup-details-body">
-                    {contract.loading && <LoadingTile></LoadingTile>}
-
-                    {!contract.loading && contract.state && (
-                      <div>
-                        {new CoreStaker(accountData).hasLocked(
-                          contract.state
-                        ) ? (
-                          <div>
-                            <div className="info-msg">
-                              You have opted for lockup.
-                            </div>
-                            <div className="lockup-deadline">
-                              <div>
-                                <span className="key">
-                                  Your lockup duration : &nbsp;
-                                </span>
-                                <span className="value">
-                                  {new CoreStaker(
-                                    accountData
-                                  ).getLockupDuration()}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="lockup-actions">
-                              <Button
-                                variant={"outlined"}
-                                color={"primary"}
-                                onClick={() => {
-                                  setLockupModalVisibility(true);
-                                }}
-                              >
-                                Update Lockup
-                              </Button>
-                              <Lockup
-                                show={isLockupModalVisible}
-                                accountData={accountData}
-                                address={activeAccount.address}
-                                onClose={() => {
-                                  setLockupModalVisibility(false);
-                                }}
-                                onSuccess={() => {
-                                  dispatch(
-                                    loadAccountData(activeAccount.address)
-                                  );
-                                  setLockupModalVisibility(false);
-                                }}
-                              ></Lockup>
-                            </div>
-                          </div>
-                        ) : (
-                          <div>
-                            {new CoreStaker(
-                              accountData
-                            ).hasLockupDeadlineCompleted() ? (
-                              <div>
-                                <div className="info-msg">
-                                  Lockup deadline is completed. you will not be
-                                  able to lockup anymore.
-                                </div>
-                              </div>
-                            ) : (
-                              <div>
-                                <div className="info-msg">
-                                  You have not locked your coins yet. You can
-                                  opt-in for locking using below button.
-                                </div>
-                                <div className="lockup-deadline">
-                                  <div>
-                                    <span className="key">
-                                      Deadline duration : &nbsp;
-                                    </span>
-                                    <span className="value">
-                                      {new CoreStaker(
-                                        accountData
-                                      ).getLockupDeadlineDuration()}
-                                    </span>
-                                  </div>
-                                  <div>
-                                    <span className="key">
-                                      Deadline date : &nbsp;
-                                    </span>
-                                    <span className="value">
-                                      {new CoreStaker(
-                                        accountData
-                                      ).lockupDeadlineDate()}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="lockup-actions">
-                                  <Button
-                                    variant={"outlined"}
-                                    color={"primary"}
-                                    onClick={() => {
-                                      setLockupModalVisibility(true);
-                                    }}
-                                  >
-                                    Lock
-                                  </Button>
-                                  <Lockup
-                                    show={isLockupModalVisible}
-                                    accountData={accountData}
-                                    address={activeAccount.address}
-                                    onClose={() => {
-                                      setLockupModalVisibility(false);
-                                    }}
-                                    onSuccess={() => {
-                                      dispatch(
-                                        loadAccountData(activeAccount.address)
-                                      );
-                                      setLockupModalVisibility(false);
-                                    }}
-                                  ></Lockup>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>*/}
               </div>
             )}
         </div>
