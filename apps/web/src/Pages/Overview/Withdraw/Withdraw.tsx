@@ -43,7 +43,13 @@ function Lockup({ show, onClose }: LockupProps): ReactElement {
     resetState();
   }
 
-  function resetState() {}
+  function resetState() {
+    setAmount("");
+    setTxnId("");
+    setTxnMsg("");
+    setAvailableBalance(-1);
+    setMinBalance(-1);
+  }
 
   const { transactionSigner, activeAccount } = useWallet();
 
@@ -56,7 +62,6 @@ function Lockup({ show, onClose }: LockupProps): ReactElement {
     (state: RootState) => state.user
   );
 
-  const dispatch = useAppDispatch();
 
   const [txnId, setTxnId] = useState<string>("");
   const [txnMsg, setTxnMsg] = useState<string>("");
@@ -91,16 +96,16 @@ function Lockup({ show, onClose }: LockupProps): ReactElement {
           signer: transactionSigner,
         }
       );
-
+      const txnId = transaction.txID();
       await waitForConfirmation(
-        transaction.txID(),
+        txnId,
         20,
         voiStakingUtils.network.getAlgodClient()
       );
 
-      setTxnId(transaction.txID());
+      setTxnId(txnId);
       setTxnMsg("You have withdrawn successfully.");
-      dispatch(loadAccountData(activeAccount.address));
+      resetState();
     } catch (e) {
       showException(e);
     } finally {
@@ -184,14 +189,14 @@ function Lockup({ show, onClose }: LockupProps): ReactElement {
             </div>
           </DialogTitle>
           <DialogContent>
-            <div className="deposit-wrapper">
-              <div className="deposit-container">
+            <div className="withdraw-wrapper">
+              <div className="withdraw-container">
                 {!isDataLoading &&
                   activeAccount &&
                   accountData &&
                   stakingAccount &&
                   contractState && (
-                    <div className="deposit-body">
+                    <div className="withdraw-body">
                       <div className="props">
                         <div className="prop">
                           <div className="key">Total Balance</div>
@@ -228,7 +233,7 @@ function Lockup({ show, onClose }: LockupProps): ReactElement {
                           </div>
                         </div>
                       </div>
-                      <div className="deposit-widget">
+                      <div className="withdraw-widget">
                         <Grid container spacing={0}>
                           <Grid item xs={12}>
                             <FormControl
@@ -353,7 +358,7 @@ function Lockup({ show, onClose }: LockupProps): ReactElement {
                               color={"primary"}
                               size={"large"}
                               onClick={() => {
-                                Withdraw(accountData);
+                                withdraw(accountData);
                               }}
                             >
                               Withdraw
