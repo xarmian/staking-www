@@ -1,4 +1,4 @@
-import React, { ReactElement, useEffect, useState } from "react";
+import React, { ReactElement, useEffect, useMemo, useState } from "react";
 import "./Withdraw.scss";
 import {
   Button,
@@ -61,7 +61,6 @@ function Lockup({ show, onClose }: LockupProps): ReactElement {
   const { account, staking, contract } = useSelector(
     (state: RootState) => state.user
   );
-
 
   const [txnId, setTxnId] = useState<string>("");
   const [txnMsg, setTxnMsg] = useState<string>("");
@@ -137,16 +136,15 @@ function Lockup({ show, onClose }: LockupProps): ReactElement {
           new CoreAccount(account as AccountResult).availableBalance()
         );
       });
-  }, [activeAccount, stakingAccount]);
+  }, [activeAccount]);
 
-  const [withdrawableBalance, setWithdrawableBalance] = useState<number>(-1);
-  useEffect(() => {
-    if (!activeAccount || !accountData || !contractState) return;
-    const algod = new NodeClient(voiStakingUtils.network);
-    new CoreStaker(accountData)
-      .getMinBalance(algod.algod, contractState)
-      .then(setWithdrawableBalance);
-  }, [activeAccount, accountData]);
+  const withdrawableBalance = useMemo(() => {
+    if (minBalance < 0 || !stakingAccount) return -1;
+    const balance =
+      new CoreAccount(stakingAccount).availableBalance() - minBalance;
+    const adjustedBalance = balance < 0 ? 0 : balance;
+    return microalgosToAlgos(adjustedBalance);
+  }, [minBalance, stakingAccount]);
 
   const errorMessage = (() => {
     if (amount === "") {
@@ -161,7 +159,10 @@ function Lockup({ show, onClose }: LockupProps): ReactElement {
     if (Number(amount) <= 0) {
       return "Amount should be greater than 0";
     }
-    if (withdrawableBalance < microalgosToAlgos(Number(amount))) {
+    if (withdrawableBalance < 0) {
+      return "Withdrawable balance not available";
+    }
+    if (withdrawableBalance < Number(amount)) {
       return "Insufficient withdrawable balance";
     }
     return "";
@@ -221,10 +222,14 @@ function Lockup({ show, onClose }: LockupProps): ReactElement {
                           <div className="key">Withdrawable Balance</div>
                           <div className="value">
                             {withdrawableBalance < 0 ? (
-                              <Skeleton width="80" height="20" />
+                              "-"
                             ) : (
                               <NumericFormat
-                                value={microalgosToAlgos(withdrawableBalance)}
+                                value={
+                                  withdrawableBalance >= 0
+                                    ? withdrawableBalance
+                                    : 0
+                                }
                                 suffix=" VOI"
                                 displayType={"text"}
                                 thousandSeparator={true}
@@ -249,11 +254,14 @@ function Lockup({ show, onClose }: LockupProps): ReactElement {
                                   disabled={availableBalance - 5000 <= 0}
                                   variant="outlined"
                                   onClick={() => {
-                                    setAmount(
-                                      microalgosToAlgos(
-                                        withdrawableBalance
-                                      ).toString()
-                                    );
+                                    if (withdrawableBalance > 0) {
+                                      setAmount(withdrawableBalance.toString());
+                                    } else {
+                                      showSnack(
+                                        "Withdrawable balance not available",
+                                        "error"
+                                      );
+                                    }
                                   }}
                                 >
                                   Max
@@ -268,7 +276,6 @@ function Lockup({ show, onClose }: LockupProps): ReactElement {
                                 }
                                 value={amount}
                                 onChange={(ev) => {
-                                  console.log(availableBalance - 5000);
                                   if (availableBalance - 5000 <= 0) return;
                                   setAmount(ev.target.value);
                                 }}
