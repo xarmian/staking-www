@@ -1,5 +1,5 @@
 import "./Staking.scss";
-import { ReactElement, useState } from "react";
+import React, { ReactElement, useState } from "react";
 import { useWallet } from "@txnlab/use-wallet-react";
 import { LoadingTile } from "@repo/ui";
 import { useSelector } from "react-redux";
@@ -7,9 +7,14 @@ import { RootState, useAppDispatch } from "../../Redux/store";
 import Table from "./Table/Table";
 
 import Lockup from "./Lockup/Lockup";
-import { loadAccountData } from "../../Redux/staking/userReducer";
+import {
+  loadAccountData,
+  loadAvailableBalance,
+} from "../../Redux/staking/userReducer";
 import moment from "moment";
-import { Button } from "@mui/material";
+import { Button, Stack, Typography } from "@mui/material";
+import BlinkingText from "../../Components/BlinkingText/BlinkingText";
+import { STAKING_CTC_INFO, STAKING_FUNDER } from "@repo/voix";
 
 function Staking(): ReactElement {
   const { loading } = useSelector((state: RootState) => state.node);
@@ -21,10 +26,14 @@ function Staking(): ReactElement {
 
   const { availableContracts } = account;
 
-  const funder = "BNERIHFXRPMF5RI4UQHMB6CFZ4RVXIBOJUNYEUXKDUSETECXDNGWLW5EOY";
+  const funder = STAKING_FUNDER;
+  const parent_id = STAKING_CTC_INFO;
 
   const filteredContracts = availableContracts.filter(
-    (contract) => contract.global_funder === funder
+    (contract) =>
+      contract.global_funder === funder &&
+      contract.global_parent_id === parent_id &&
+      contract.global_owner === activeAccount?.address
   );
 
   const dispatch = useAppDispatch();
@@ -35,10 +44,6 @@ function Staking(): ReactElement {
 
   const [isLockupModalVisible, setLockupModalVisibility] =
     useState<boolean>(false);
-
-  const step_funder =
-    "BNERIHFXRPMF5RI4UQHMB6CFZ4RVXIBOJUNYEUXKDUSETECXDNGWLW5EOY";
-  const step_parent_id = 87502365;
 
   function getWeeksFromTime(
     startTime: Date,
@@ -53,15 +58,12 @@ function Staking(): ReactElement {
 
     return weeksPassed;
   }
+  const startTime = new Date("2024-09-30T00:00:00Z"); // start of week 1
 
-  //const startTime = new Date("2024-08-17T00:00:00Z"); // UTC+0 start time 
-  //const startTime = new Date("2024-08-24T00:00:00Z"); // UTC+0 start time (week 4)
-  //const startTime = new Date("2024-09-01T00:00:00Z"); // UTC+0 start time (week 3)
-  //const startTime = new Date("2024-09-07T00:00:00Z"); // UTC+0 start time (week 2)
-  const startTime = new Date("2024-09-14T00:00:00Z"); // UTC+0 start time (week 1)
   const weeksPassed = getWeeksFromTime(startTime);
 
-  console.log({ weeksPassed });
+  // startTime as Unix timestamp
+  const startSeconds = moment(startTime).unix();
 
   // utils
 
@@ -100,43 +102,91 @@ function Staking(): ReactElement {
     <div className="overview-wrapper">
       <div className="overview-container">
         <div className="overview-header">
-          <div>Staking</div>
-          {accountData && activeAccount && (
+          <div style={{ marginLeft: "10px" }}>Staking</div>
+          {activeAccount && (
             <Lockup
               show={isLockupModalVisible}
-              accountData={accountData}
               address={activeAccount.address}
               onClose={() => {
                 setLockupModalVisibility(false);
               }}
-              onSuccess={() => {
-                dispatch(loadAccountData(activeAccount.address));
+              onSuccess={async () => {
                 setLockupModalVisibility(false);
+                dispatch(loadAccountData(activeAccount.address));
+                dispatch(loadAvailableBalance(activeAccount.address));
               }}
               rate={computeRate(weeksPassed + 1)}
             ></Lockup>
           )}
-          <Button
-            variant="outlined"
-            onClick={() => {
-              setLockupModalVisibility(true);
-            }}
+          <Stack
+            direction="row"
+            spacing={2}
+            sx={{ alignItems: "center", marginRight: "10px" }}
           >
-            Stake
-          </Button>
+            {!isLockupModalVisible ? <BlinkingText text="Start here" /> : null}
+            <Button
+              variant="outlined"
+              onClick={() => {
+                setLockupModalVisibility(true);
+              }}
+            >
+              Stake
+            </Button>
+          </Stack>
         </div>
         <div className="overview-body">
           {isDataLoading && <LoadingTile></LoadingTile>}
           {!isDataLoading && accountData && filteredContracts.length > 0 ? (
             <Table
-              funder={step_funder}
-              parent_id={step_parent_id}
-              rate={computeRate(weeksPassed + 1)}
+              funder={funder}
+              parent_id={parent_id}
+              rate={computeRate}
+              start={startSeconds}
             ></Table>
           ) : null}
           {!isDataLoading && !accountData && filteredContracts.length === 0 ? (
-            <div className="info-msg">
-              No contract details found for your account.
+            <div className="info-msg" style={{ padding: "10px" }}>
+              No staking contract found for your account. Learn more about Voi
+              staking contracts and the staking program: <br />
+              <br />
+              <ul>
+                {[
+                  {
+                    slug: "understanding-voi-staking-contracts-delegation-and-other-key-features-e6b117bad0ac",
+                    title: "Understanding Voi Staking",
+                  },
+                  {
+                    slug: "airdrop-programs-everything-you-need-to-know-a84706bd8599",
+                    title: "Airdrop Programs: Everything You Need To Know",
+                  },
+                  {
+                    slug: "staking-program-how-to-guide-382ea5085dab",
+                    title: "Staking Program: How To Guide",
+                  },
+                ].map((item) => (
+                  <li
+                    key={item.slug}
+                    style={{ padding: "5px", listStyle: "inside" }}
+                  >
+                    <a
+                      target="_blank"
+                      href={`https://medium.com/@voifoundation/${item.slug}`}
+                    >
+                      {item.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+              <br />
+              <Typography variant="h6">Steps</Typography>
+              <ol>
+                <li>
+                  1. Click on the "Stake" button to begin to enter stake amount
+                  and lockup duration
+                </li>
+                <li>2. Confirm the stake amount and lockup duration</li>
+                <li>3. Sign transaction</li>
+              </ol>
             </div>
           ) : null}
         </div>

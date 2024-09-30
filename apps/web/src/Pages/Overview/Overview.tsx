@@ -1,8 +1,15 @@
 import "./Overview.scss";
-import React, { ReactElement, useEffect, useState } from "react";
+import React, { ReactElement, useEffect, useMemo, useState } from "react";
 import { useWallet } from "@txnlab/use-wallet-react";
 import { LoadingTile } from "@repo/ui";
-import { AccountData, CoreStaker } from "@repo/voix";
+import {
+  AccountData,
+  AIRDROP_CTC_INFO,
+  AIRDROP_FUNDER,
+  CoreStaker,
+  STAKING_CTC_INFO,
+  STAKING_FUNDER,
+} from "@repo/voix";
 import { useSelector } from "react-redux";
 import { RootState, useAppDispatch } from "../../Redux/store";
 import {
@@ -37,6 +44,7 @@ import humanizeDuration from "humanize-duration";
 import { InfoTooltip } from "../../Components/InfoToolTip/InfoToolTip";
 import { Copy } from "lucide-react";
 import CopyText from "@/Components/Copy";
+import Register from "../Stake/Register/Register";
 
 function Overview(): ReactElement {
   const { loading } = useSelector((state: RootState) => state.node);
@@ -48,11 +56,15 @@ function Overview(): ReactElement {
 
   const { availableContracts } = account;
 
-  const funder = "62TIVJSZOS4DRSSYYDDZELQAGFYQC5JWKCHRBPPYKTZN2OOOXTGLB5ZJ4E";
-  const parent_id = 5211;
+  const airdrop_funder = AIRDROP_FUNDER;
+  const airdrop_parent_id = AIRDROP_CTC_INFO;
+
+  const staking_funder = STAKING_FUNDER;
+  const staking_parent_id = STAKING_CTC_INFO;
 
   const [airdropContracts, setAirdropContracts] = useState<AccountData[]>([]);
   const [airdrop2Contracts, setAirdrop2Contracts] = useState<AccountData[]>([]);
+  const [stakingContracts, setStakingContracts] = useState<AccountData[]>([]);
   const [otherContracts, setOtherContracts] = useState<AccountData[]>([]);
 
   useEffect(() => {
@@ -60,24 +72,33 @@ function Overview(): ReactElement {
     setAirdropContracts(
       availableContracts.filter(
         (contract) =>
-          contract.global_funder === funder &&
-          contract.global_parent_id === parent_id &&
+          contract.global_funder === airdrop_funder &&
+          contract.global_parent_id === airdrop_parent_id &&
           contract.global_initial !== "0"
       )
     );
     setAirdrop2Contracts(
       availableContracts.filter(
         (contract) =>
-          contract.global_funder === funder &&
-          contract.global_parent_id === parent_id &&
+          contract.global_funder === airdrop_funder &&
+          contract.global_parent_id === airdrop_parent_id &&
           contract.global_initial === "0"
+      )
+    );
+    setStakingContracts(
+      availableContracts.filter(
+        (contract) =>
+          contract.global_funder === staking_funder &&
+          contract.global_parent_id === staking_parent_id
       )
     );
     setOtherContracts(
       availableContracts.filter(
         (contract) =>
-          contract.global_funder !== funder ||
-          contract.global_parent_id !== parent_id
+          (contract.global_funder !== airdrop_funder ||
+            contract.global_parent_id !== airdrop_parent_id) &&
+          (contract.global_funder !== staking_funder ||
+            contract.global_parent_id !== staking_parent_id)
       )
     );
   }, [availableContracts]);
@@ -108,6 +129,10 @@ function Overview(): ReactElement {
 
   const [isWithdrawModalVisible, setWithdrawModalVisibility] =
     useState<boolean>(false);
+
+  const [isRegisterVisible, setRegisterVisibility] = useState<boolean>(false);
+  const [txnId, setTxnId] = useState<string>("");
+  const [txnMsg, setTxnMsg] = useState<string>("");
 
   const [expiresIn, setExpiresIn] = useState<string>("--");
 
@@ -144,6 +169,14 @@ function Overview(): ReactElement {
       .getMinBalance(algod.algod, contractState)
       .then(setMinBalance);
   }, [activeAccount, accountData, contractState]);
+
+  const withdrawableBalance = useMemo(() => {
+    if (minBalance < 0 || !stakingAccount) return -1;
+    const balance =
+      new CoreAccount(stakingAccount).availableBalance() - minBalance;
+    const adjustedBalance = balance < 0 ? 0 : balance;
+    return microalgosToAlgos(adjustedBalance);
+  }, [minBalance, stakingAccount]);
 
   const [tab, setTab] = useState(0);
   const handleChange = (event: React.SyntheticEvent, newValue: number) => {
@@ -187,7 +220,7 @@ function Overview(): ReactElement {
             {airdropContracts.map((contract, index) => {
               return (
                 <Tab
-                className="tab"
+                  className="tab"
                   key={contract.contractId}
                   label="Phase I"
                   {...a11yProps(index)}
@@ -202,18 +235,31 @@ function Overview(): ReactElement {
             {airdrop2Contracts.map((contract, index) => {
               return (
                 <Tab
-                className="tab"
+                  className="tab"
                   key={contract.contractId}
                   label="Phase II"
                   {...a11yProps(index)}
-                  style={{ minHeight: "unset", padding: "6px 16px", }}
+                  style={{ minHeight: "unset", padding: "6px 16px" }}
                   onClick={() => {
                     dispatch(initAccountData(contract));
                   }}
                 />
               );
             })}
-
+            {stakingContracts.map((contract, index) => {
+              return (
+                <Tab
+                  className="tab"
+                  key={contract.contractId}
+                  label={`Staking ${index + 1}`}
+                  {...a11yProps(index)}
+                  style={{ minHeight: "unset", padding: "6px 16px" }}
+                  onClick={() => {
+                    dispatch(initAccountData(contract));
+                  }}
+                />
+              );
+            })}
             {otherContracts.map((contract, index) => {
               return (
                 <Tab
@@ -252,11 +298,12 @@ function Overview(): ReactElement {
                     justifyContent: "space-between",
                   }}
                 >
-                  <div style={{
-                  }} className="py-2 sm:py-0 ">Contract Overview</div>
-                  <ButtonGroup  variant="outlined">
+                  <div style={{}} className="py-2 sm:py-0 ">
+                    Contract Overview
+                  </div>
+                  <ButtonGroup variant="outlined">
                     <Button
-                    className="button"
+                      className="button"
                       onClick={() => {
                         setDepositModalVisibility(true);
                       }}
@@ -264,13 +311,20 @@ function Overview(): ReactElement {
                       Deposit
                     </Button>
                     <Button
-                    className="button"
-
+                      className="button"
                       onClick={() => {
                         setWithdrawModalVisibility(true);
                       }}
                     >
                       Withdraw
+                    </Button>
+                    <Button
+                      className="button"
+                      onClick={() => {
+                        setRegisterVisibility(true);
+                      }}
+                    >
+                      Earn Block Rewards
                     </Button>
                   </ButtonGroup>
                 </div>
@@ -284,11 +338,28 @@ function Overview(): ReactElement {
                   onClose={() => handleModalClose(setWithdrawModalVisibility)}
                   onSuccess={() => handleModalClose(setWithdrawModalVisibility)}
                 ></Withdraw>
+                {activeAccount ? (
+                  <Register
+                    show={isRegisterVisible}
+                    onClose={() => {
+                      setRegisterVisibility(false);
+                    }}
+                    //accountData={accountData}
+                    address={activeAccount.address}
+                    onSuccess={(txnId: string) => {
+                      setTxnId(txnId);
+                      setTxnMsg("You have registered successfully.");
+                      setRegisterVisibility(false);
+                      dispatch(loadAccountData(activeAccount.address));
+                    }}
+                    accountData={accountData}
+                  ></Register>
+                ) : null}
 
                 <Grid container spacing={2} className="overview-tiles">
-                  <Grid item xs={12} ></Grid>
-                  
-                  <Grid item  xs={12} sm={6} md={4} lg={4} xl={3}>
+                  <Grid item xs={12}></Grid>
+
+                  <Grid item xs={12} sm={6} md={4} lg={4} xl={3}>
                     <div className="tile">
                       <div className="title">
                         <div className="label">Balance</div>
@@ -338,13 +409,7 @@ function Overview(): ReactElement {
                       <div className="content">
                         <NumericFormat
                           value={
-                            minBalance < 0
-                              ? "-"
-                              : microalgosToAlgos(
-                                  new CoreAccount(
-                                    stakingAccount
-                                  ).availableBalance() - minBalance
-                                )
+                            withdrawableBalance > 0 ? withdrawableBalance : 0
                           }
                           suffix=" Voi"
                           displayType={"text"}
@@ -483,9 +548,11 @@ function Overview(): ReactElement {
                     </div>
                   )}
                 </div>
-                <div  className="props">
+                <div className="props">
                   <div className="prop">
-                    <div className="key">Your Account <CopyText text={activeAccount?.address!} /></div>
+                    <div className="key">
+                      Owner Account <CopyText text={activeAccount?.address!} />
+                    </div>
                     <div
                       className="val hover hover-underline underline truncate"
                       onClick={() => {
@@ -498,7 +565,12 @@ function Overview(): ReactElement {
                     </div>
                   </div>
                   <div className="prop">
-                    <div className="key">Staking Account <CopyText text={new CoreStaker(accountData).stakingAddress()} /></div>
+                    <div className="key">
+                      Contract Account{" "}
+                      <CopyText
+                        text={new CoreStaker(accountData).stakingAddress()}
+                      />
+                    </div>
                     <div
                       className="val hover hover-underline underline truncate"
                       onClick={() => {
@@ -511,7 +583,12 @@ function Overview(): ReactElement {
                     </div>
                   </div>
                   <div className="prop">
-                    <div className="key">Staking Contract <CopyText text={new CoreStaker(accountData).contractId()??""} /></div>
+                    <div className="key">
+                      Contract Id{" "}
+                      <CopyText
+                        text={new CoreStaker(accountData).contractId() ?? ""}
+                      />
+                    </div>
                     <div
                       className="val hover hover-underline underline truncate"
                       onClick={() => {
@@ -525,9 +602,18 @@ function Overview(): ReactElement {
                   </div>
                   {new CoreStaker(accountData).isDelegated(contractState) ? (
                     <div className="prop">
-                      <div className="key">Delegated to <CopyText text={new CoreStaker(accountData).delegateAddress(
+                      <div className="key">
+                        Delegated to{" "}
+                        {new CoreStaker(accountData).delegateAddress(
                           contractState
-                        )??""} /></div>
+                        ) && (
+                          <CopyText
+                            text={new CoreStaker(accountData).delegateAddress(
+                              contractState
+                            )}
+                          />
+                        )}
+                      </div>
                       <div
                         className="val hover hover-underline underline truncate"
                         onClick={() => {
