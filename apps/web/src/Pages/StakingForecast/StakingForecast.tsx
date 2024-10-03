@@ -149,8 +149,7 @@ function StakingForecast(): ReactElement {
           </div>
           <Stack direction="column" spacing={2}>
             <Typography variant="body2" className="staking-forecast-subheader">
-              The staking forecast tool allows you to easily forecast your
-              staking rewards that best suits your situation.
+              The staking forecast tool allows you to easily forecast staking rewards based on stake and lockup duration.
             </Typography>
             <Typography variant="body2" className="staking-forecast-subheader">
               Looking to acquire more Voi to stake? Use a centralized exchange
