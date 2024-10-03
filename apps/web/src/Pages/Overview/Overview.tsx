@@ -38,15 +38,25 @@ import Withdraw from "./Withdraw/Withdraw";
 import {
   initAccountData,
   loadAccountData,
+  loadContractState,
 } from "../../Redux/staking/userReducer";
 import ContractPicker from "../../Components/pickers/ContractPicker/ContractPicker";
 import humanizeDuration from "humanize-duration";
 import { InfoTooltip } from "../../Components/InfoToolTip/InfoToolTip";
 import { Copy } from "lucide-react";
 import CopyText from "@/Components/Copy";
-import Register from "../Stake/Register/Register";
+import Register from "./Register/Register";
+import Banner from "@/Components/Banner/Banner";
+import axios from "axios";
+import moment from "moment";
+import { useParams } from "react-router-dom";
+import DeadlineCountdown from "@/Components/DeadlineCountdown/DeadlineCountdown";
 
 function Overview(): ReactElement {
+  const params = useParams<{ contractId: string }>();
+
+  const week1Deadline = new Date("2024-10-07T00:00:00"); // Replace with your Week 1 deadline date
+
   const { loading } = useSelector((state: RootState) => state.node);
   const { activeAccount } = useWallet();
 
@@ -101,6 +111,171 @@ function Overview(): ReactElement {
             contract.global_parent_id !== staking_parent_id)
       )
     );
+  }, [availableContracts]);
+
+  const [estimatedReward, setEstimatedReward] = useState<number>(0);
+  useEffect(() => {
+    if (!activeAccount) return;
+    axios
+      .get(`https://voirewards.com/api/phase2?wallet=${activeAccount.address}`)
+      .then((res) => {
+        setEstimatedReward(res.data?.estimatedReward || 0);
+      })
+      .catch((err) => {
+        console.log(err);
+      });
+  }, [activeAccount]);
+
+  function getWeeksFromTime(
+    startTime: Date,
+    currentUnixTime = moment().unix()
+  ): number {
+    const startUnixTime = moment(startTime).unix(); // Start time in Unix timestamp
+
+    const secondsPerWeek = 60 * 60 * 24 * 7;
+
+    const timeDifference = currentUnixTime - startUnixTime;
+    const weeksPassed = Math.floor(timeDifference / secondsPerWeek);
+
+    return weeksPassed;
+  }
+
+  const startTime = new Date("2024-09-30T00:00:00Z"); // start of week 1
+
+  const weeksPassed = getWeeksFromTime(startTime);
+
+  function computeLockupMultiplier(B2: number, R1: number) {
+    if (B2 <= 12) {
+      return 0.45 * Math.pow(B2 / R1, 2);
+    } else {
+      return Math.pow(B2 / R1, 2);
+    }
+  }
+
+  function computeTimingMultiplier(week: number) {
+    switch (week) {
+      case 1:
+        return 1;
+      case 2:
+        return 0.8;
+      case 3:
+        return 0.6;
+      case 4:
+        return 0.4;
+      default:
+        return 0;
+    }
+  }
+
+  const period_limit = 5;
+
+  const computeRate = (week: number) => (period: number) => {
+    const lockupMultiplier = computeLockupMultiplier(period, period_limit);
+    const timingMultiplier = computeTimingMultiplier(week);
+    return lockupMultiplier * timingMultiplier;
+  };
+
+  const [airdropEstimatedReward, setAirdropEstimatedReward] =
+    useState<number>(0);
+  useEffect(() => {
+    const calculateCompoundInterest = (
+      principal: number,
+      rate: number,
+      time: number,
+      compoundingsPerYear: number
+    ) => {
+      const r = rate / 100; // Convert percentage to decimal
+      return (
+        principal *
+        Math.pow(1 + r / compoundingsPerYear, compoundingsPerYear * time)
+      );
+    };
+    const rate = (period: number) => {
+      const rates: { [key: number]: number } = {
+        1: 10,
+        2: 12,
+        3: 15,
+        4: 18,
+        5: 20,
+      };
+      return rates[period] || 0;
+    };
+    let estimate = 0;
+    if (airdrop2Contracts.length > 0) {
+      const { global_period } = airdrop2Contracts[0];
+      estimate +=
+        calculateCompoundInterest(
+          estimatedReward,
+          rate(global_period),
+          global_period,
+          1
+        ) * 1e6;
+    }
+    if (airdropContracts.length > 0) {
+      const airdropTotal = airdropContracts.reduce((acc, contract) => {
+        const { global_period, global_initial } = contract;
+        return (
+          acc +
+          calculateCompoundInterest(
+            Number(global_initial),
+            rate(global_period),
+            global_period,
+            1
+          )
+        );
+      }, 0);
+      estimate += airdropTotal;
+    }
+    setAirdropEstimatedReward(Math.round(estimate));
+  }, [estimatedReward, airdropContracts, airdrop2Contracts]);
+
+  const [stakedTotal, setStakedTotal] = useState<number>(0);
+  useEffect(() => {
+    setStakedTotal(
+      availableContracts.reduce((acc, contract) => {
+        return acc + Number(contract.global_total);
+      }, 0)
+    );
+  }, [availableContracts]);
+
+  const [nextExpire, setNextExpire] = useState<string>("--");
+  useEffect(() => {
+    if (!availableContracts) return;
+    new NodeClient(voiStakingUtils.network)
+      .status()
+      .then((status) => {
+        const currentRound = status["last-round"];
+        new BlockClient(voiStakingUtils.network)
+          .getAverageBlockTimeInMS()
+          .then((blockTimeMs) => {
+            const nextExpire = availableContracts
+              .filter(
+                (el) => !!el.part_vote_lst && el.part_vote_lst > currentRound
+              )
+              .reduce((acc, contract) => {
+                return Math.min(
+                  acc,
+                  contract.part_vote_lst || Number.MAX_SAFE_INTEGER
+                );
+              }, Number.MAX_SAFE_INTEGER);
+            if (nextExpire === Number.MAX_SAFE_INTEGER) return;
+            const diff = nextExpire - currentRound;
+            const diffMs = diff * blockTimeMs;
+            const nextExpireDuration = humanizeDuration(diffMs, {
+              largest: 2,
+              round: true,
+            });
+            setNextExpire(nextExpireDuration);
+          })
+          .catch((error) => {
+            console.error("Error fetching average block time:", error);
+            // Optionally, set a default value or state to inform the user
+          });
+      })
+      .catch((error) => {
+        console.error("Error fetching node status:", error);
+        // Optionally, set a default value or state to inform the user
+      });
   }, [availableContracts]);
 
   const dispatch = useAppDispatch();
@@ -161,6 +336,11 @@ function Overview(): ReactElement {
     }
   }, [staking]);
 
+  useEffect(() => {
+    if (!accountData) return;
+    setTab(accountData.contractId);
+  }, [accountData]);
+
   const [minBalance, setMinBalance] = useState<number>(-1);
   useEffect(() => {
     if (!activeAccount || !contractState || !accountData) return;
@@ -178,7 +358,8 @@ function Overview(): ReactElement {
     return microalgosToAlgos(adjustedBalance);
   }, [minBalance, stakingAccount]);
 
-  const [tab, setTab] = useState(0);
+  const [tab, setTab] = useState(accountData?.contractId || 0);
+
   const handleChange = (event: React.SyntheticEvent, newValue: number) => {
     setTab(newValue);
   };
@@ -201,12 +382,131 @@ function Overview(): ReactElement {
   return (
     <div className="overview-wrapper-component">
       <div className="overview-container">
+        <DeadlineCountdown deadline={week1Deadline} />
+        <Box sx={{ mt: 5 }}>
+          <Banner />
+        </Box>
         <div
           className="overview-header"
           style={{
             display: "flex",
             alignItems: "center",
             justifyContent: "flex-start",
+          }}
+        >
+          <div className="px-2 sm:px-0">Overview</div>
+        </div>
+        <div className="overview-body px-2 sm:px-0">
+          <Grid container spacing={2} className="overview-tiles">
+            <Grid item xs={12} sm={6} md={4} lg={4} xl={3}>
+              <div className="tile">
+                <div className="title">
+                  <div className="label">Count</div>
+                  <InfoTooltip
+                    title={
+                      <div>
+                        <Typography variant="h6">Counts</Typography>
+                        <Typography variant="body2">
+                          Number of contracts available for your account.
+                        </Typography>
+                      </div>
+                    }
+                  />
+                </div>
+                <div className="content">
+                  <NumericFormat
+                    value={availableContracts.length}
+                    suffix=""
+                    displayType={"text"}
+                    thousandSeparator={true}
+                  ></NumericFormat>
+                </div>
+              </div>
+            </Grid>
+            <Grid item xs={12} sm={6} md={4} lg={4} xl={3}>
+              <div className="tile">
+                <div className="title">
+                  <div className="label">Airdrop Estimate</div>
+                  <InfoTooltip
+                    title={
+                      <div>
+                        <Typography variant="h6">Airdrop Estimate</Typography>
+                        <Typography variant="body2">
+                          Estimated reward for the airdrop program.
+                        </Typography>
+                      </div>
+                    }
+                  />
+                </div>
+                <div className="content">
+                  <NumericFormat
+                    value={
+                      airdropEstimatedReward > 0
+                        ? microalgosToAlgos(airdropEstimatedReward)
+                        : 0
+                    }
+                    suffix=" Voi"
+                    displayType={"text"}
+                    thousandSeparator={true}
+                    decimalScale={0}
+                  ></NumericFormat>
+                </div>
+              </div>
+            </Grid>
+            <Grid item xs={12} sm={6} md={4} lg={4} xl={3}>
+              <div className="tile">
+                <div className="title">
+                  <div className="label">Stake Total</div>
+                  <InfoTooltip
+                    title={
+                      <div>
+                        <Typography variant="h6">Stake Total</Typography>
+                        <Typography variant="body2">
+                          Amount of Voi staked in staking program. This does not
+                          include the amount after funding and airdrop
+                          contracts.
+                        </Typography>
+                      </div>
+                    }
+                  />
+                </div>
+                <div className="content">
+                  <NumericFormat
+                    value={microalgosToAlgos(stakedTotal)}
+                    suffix=" Voi"
+                    displayType={"text"}
+                    thousandSeparator={true}
+                  ></NumericFormat>
+                </div>
+              </div>
+            </Grid>
+            <Grid item xs={12} sm={6} md={4} lg={4} xl={3}>
+              <div className="tile">
+                <div className="title">
+                  <div className="label">Next expire</div>
+                  <InfoTooltip
+                    title={
+                      <div>
+                        <Typography variant="h6">Next expire</Typography>
+                        <Typography variant="body2">
+                          Time left for next participation key to expire.
+                        </Typography>
+                      </div>
+                    }
+                  />
+                </div>
+                <div className="content">{nextExpire}</div>
+              </div>
+            </Grid>
+          </Grid>
+        </div>
+        <div
+          className="overview-header"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-start",
+            marginTop: "20px",
           }}
         >
           <div className="px-2 sm:px-0">Contracts</div>
@@ -220,6 +520,7 @@ function Overview(): ReactElement {
             {airdropContracts.map((contract, index) => {
               return (
                 <Tab
+                  value={contract.contractId}
                   className="tab"
                   key={contract.contractId}
                   label="Phase I"
@@ -235,6 +536,7 @@ function Overview(): ReactElement {
             {airdrop2Contracts.map((contract, index) => {
               return (
                 <Tab
+                  value={contract.contractId}
                   className="tab"
                   key={contract.contractId}
                   label="Phase II"
@@ -249,6 +551,7 @@ function Overview(): ReactElement {
             {stakingContracts.map((contract, index) => {
               return (
                 <Tab
+                  value={contract.contractId}
                   className="tab"
                   key={contract.contractId}
                   label={`Staking ${index + 1}`}
@@ -263,6 +566,7 @@ function Overview(): ReactElement {
             {otherContracts.map((contract, index) => {
               return (
                 <Tab
+                  value={contract.contractId}
                   key={contract.contractId}
                   label={contract.contractId}
                   {...a11yProps(index)}
@@ -299,7 +603,7 @@ function Overview(): ReactElement {
                   }}
                 >
                   <div style={{}} className="py-2 sm:py-0 ">
-                    Contract Overview
+                    Contract Details
                   </div>
                   <ButtonGroup variant="outlined">
                     <Button
@@ -357,8 +661,6 @@ function Overview(): ReactElement {
                 ) : null}
 
                 <Grid container spacing={2} className="overview-tiles">
-                  <Grid item xs={12}></Grid>
-
                   <Grid item xs={12} sm={6} md={4} lg={4} xl={3}>
                     <div className="tile">
                       <div className="title">

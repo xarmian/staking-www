@@ -25,6 +25,7 @@ import { Box } from "@mui/material";
 import logo from "../../assets/images/full-logo.png";
 import MobileMenu from "../../Components/MobilePanel";
 import "../App.scss";
+import StakingForecast from "@/Pages/StakingForecast/StakingForecast";
 
 function AppRouter(): ReactElement {
   const { selectedNode } = useSelector((state: RootState) => state.nodes);
@@ -112,6 +113,10 @@ function AppRouter(): ReactElement {
                           path="/overview"
                           element={<Overview></Overview>}
                         ></Route>
+                        <Route
+                          path="/overview/:contractId"
+                          element={<Overview></Overview>}
+                        ></Route>
                         <Route path="/stake" element={<Stake></Stake>}></Route>
                         <Route
                           path="/deposit"
@@ -126,20 +131,23 @@ function AppRouter(): ReactElement {
                           path="/transfer"
                           element={<Transfer></Transfer>}
                     ></Route>
+                    */}
                         <Route
                           path="/delegate"
                           element={<Delegate></Delegate>}
-                    ></Route>*/}
+                        ></Route>
                         <Route
                           path="/airdrop"
                           element={<Airdrop></Airdrop>}
                         ></Route>
-                        {
-                          <Route
-                            path="/staking"
-                            element={<Staking></Staking>}
-                          ></Route>
-                        }
+                        <Route
+                          path="/staking-forecast"
+                          element={<StakingForecast></StakingForecast>}
+                        ></Route>
+                        <Route
+                          path="/staking"
+                          element={<Staking></Staking>}
+                        ></Route>
                         {/*<Route
                           path="/setting"
                           element={<Setting></Setting>}
