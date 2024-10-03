@@ -59,8 +59,8 @@ function StakingForecast(): ReactElement {
   const isDataLoading =
     loading || account.loading || staking.loading || contract.loading;
 
-  const [amount, setAmount] = useState<number>(100000);
-  const [lockupPeriod, setLockupPeriod] = useState<string>("12");
+  const [amount, setAmount] = useState<number>(500000);
+  const [lockupPeriod, setLockupPeriod] = useState<string>("18");
   const [forcastedRate, setForecastedRate] = useState<number>(0);
   const [forecastedReward, setForecastedReward] = useState<number>(0);
   const [totalTokens, setTotalTokens] = useState<number>(0);
